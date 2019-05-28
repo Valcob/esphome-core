@@ -32,6 +32,9 @@ enum class APIMessageType {
   LIST_ENTITIES_SENSOR_RESPONSE = 16,
   LIST_ENTITIES_SWITCH_RESPONSE = 17,
   LIST_ENTITIES_TEXT_SENSOR_RESPONSE = 18,
+  LIST_ENTITIES_SERVICE_RESPONSE = 41,
+  LIST_ENTITIES_CAMERA_RESPONSE = 43,
+  LIST_ENTITIES_CLIMATE_RESPONSE = 46,
   LIST_ENTITIES_DONE_RESPONSE = 19,
 
   SUBSCRIBE_STATES_REQUEST = 20,
@@ -42,6 +45,8 @@ enum class APIMessageType {
   SENSOR_STATE_RESPONSE = 25,
   SWITCH_STATE_RESPONSE = 26,
   TEXT_SENSOR_STATE_RESPONSE = 27,
+  CAMERA_IMAGE_RESPONSE = 44,
+  CLIMATE_STATE_RESPONSE = 47,
 
   SUBSCRIBE_LOGS_REQUEST = 28,
   SUBSCRIBE_LOGS_RESPONSE = 29,
@@ -50,6 +55,8 @@ enum class APIMessageType {
   FAN_COMMAND_REQUEST = 31,
   LIGHT_COMMAND_REQUEST = 32,
   SWITCH_COMMAND_REQUEST = 33,
+  CAMERA_IMAGE_REQUEST = 45,
+  CLIMATE_COMMAND_REQUEST = 48,
 
   SUBSCRIBE_SERVICE_CALLS_REQUEST = 34,
   SERVICE_CALL_RESPONSE = 35,
@@ -59,11 +66,13 @@ enum class APIMessageType {
   SUBSCRIBE_HOME_ASSISTANT_STATES_REQUEST = 38,
   SUBSCRIBE_HOME_ASSISTANT_STATE_RESPONSE = 39,
   HOME_ASSISTANT_STATE_RESPONSE = 40,
+
+  EXECUTE_SERVICE_REQUEST = 42,
 };
 
 class APIMessage {
  public:
-  void decode(uint8_t *buffer, size_t length);
+  void decode(const uint8_t *buffer, size_t length);
   virtual bool decode_varint(uint32_t field_id, uint32_t value);
   virtual bool decode_length_delimited(uint32_t field_id, const uint8_t *value, size_t len);
   virtual bool decode_32bit(uint32_t field_id, uint32_t value);
@@ -72,10 +81,10 @@ class APIMessage {
   virtual void encode(APIBuffer &buffer);
 };
 
-} // namespace api
+}  // namespace api
 
 ESPHOME_NAMESPACE_END
 
-#endif //USE_API
+#endif  // USE_API
 
-#endif //ESPHOME_API_API_MESSAGE_H
+#endif  // ESPHOME_API_API_MESSAGE_H

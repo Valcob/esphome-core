@@ -2,18 +2,25 @@
 #define ESPHOME_WIFI_COMPONENT_H
 
 #include <string>
+#include "esphal.h"
 #include <IPAddress.h>
 
 #ifdef ARDUINO_ARCH_ESP32
-  #include <esp_wifi.h>
-  #include <WiFiType.h>
-  #include <WiFi.h>
+#include <esp_wifi.h>
+#include <WiFiType.h>
+#include <WiFi.h>
 #endif
 #ifdef ARDUINO_ARCH_ESP8266
-  #include <ESP8266WiFiType.h>
-  #include <ESP8266WiFi.h>
+#include <ESP8266WiFiType.h>
+#include <ESP8266WiFi.h>
+#ifdef ARDUINO_ESP8266_RELEASE_2_3_0
+extern "C" {
+#include <user_interface.h>
+};
+#endif
 #endif
 
+#include "esphome/automation.h"
 #include "esphome/component.h"
 #include "esphome/helpers.h"
 #include "esphome/defines.h"
@@ -26,7 +33,7 @@ enum WiFiComponentState {
   /** WiFi is in cooldown mode because something went wrong, scanning will begin after a short period of time. */
   WIFI_COMPONENT_STATE_COOLDOWN,
   /** WiFi is in STA-only mode and currently scanning for APs. */
-   WIFI_COMPONENT_STATE_STA_SCANNING,
+  WIFI_COMPONENT_STATE_STA_SCANNING,
   /** WiFi is in STA(+AP) mode and currently connecting to an AP. */
   WIFI_COMPONENT_STATE_STA_CONNECTING,
   /** WiFi is in STA(+AP) mode and currently connecting to an AP a second time.
@@ -47,8 +54,8 @@ struct ManualIP {
   IPAddress static_ip;
   IPAddress gateway;
   IPAddress subnet;
-  IPAddress dns1; ///< The first DNS server. 0.0.0.0 for default.
-  IPAddress dns2; ///< The second DNS server. 0.0.0.0 for default.
+  IPAddress dns1;  ///< The first DNS server. 0.0.0.0 for default.
+  IPAddress dns2;  ///< The second DNS server. 0.0.0.0 for default.
 };
 
 using bssid_t = std::array<uint8_t, 6>;
@@ -68,6 +75,7 @@ class WiFiAP {
   const optional<uint8_t> &get_channel() const;
   const optional<ManualIP> &get_manual_ip() const;
   bool get_hidden() const;
+
  protected:
   std::string ssid_;
   optional<bssid_t> bssid_;
@@ -79,14 +87,10 @@ class WiFiAP {
 
 class WiFiScanResult {
  public:
-  WiFiScanResult(const bssid_t &bssid,
-                 const std::string &ssid,
-                 uint8_t channel,
-                 int8_t rssi,
-                 bool with_auth,
+  WiFiScanResult(const bssid_t &bssid, const std::string &ssid, uint8_t channel, int8_t rssi, bool with_auth,
                  bool is_hidden);
 
-  bool matches(const WiFiAP &ap);
+  bool matches(const WiFiAP &config);
 
   bool get_matches() const;
   void set_matches(bool matches);
@@ -96,6 +100,7 @@ class WiFiScanResult {
   int8_t get_rssi() const;
   bool get_with_auth() const;
   bool get_is_hidden() const;
+
  protected:
   bool matches_{false};
   bssid_t bssid_;
@@ -104,7 +109,6 @@ class WiFiScanResult {
   int8_t rssi_;
   bool with_auth_;
   bool is_hidden_;
-
 };
 
 enum WiFiPowerSaveMode {
@@ -181,7 +185,8 @@ class WiFiComponent : public Component {
   void set_use_address(const std::string &use_address);
 
  protected:
-  void setup_ap_config();
+  static std::string format_mac_addr(const uint8_t mac[6]);
+  void setup_ap_config_();
   void print_connect_params_();
 
   bool wifi_mode_(optional<bool> sta, optional<bool> ap);
@@ -199,9 +204,9 @@ class WiFiComponent : public Component {
   IPAddress wifi_soft_ap_ip_();
 
 #ifdef ARDUINO_ARCH_ESP8266
-  static void wifi_event_callback_(System_Event_t *arg);
+  static void wifi_event_callback(System_Event_t *event);
   void wifi_scan_done_callback_(void *arg, STATUS status);
-  static void s_wifi_scan_done_callback_(void *arg, STATUS status);
+  static void s_wifi_scan_done_callback(void *arg, STATUS status);
 #endif
 
 #ifdef ARDUINO_ARCH_ESP32
@@ -227,8 +232,17 @@ class WiFiComponent : public Component {
   bool ap_setup_{false};
 };
 
+template<typename... Ts> class WiFiConnectedCondition : public Condition<Ts...> {
+ public:
+  bool check(Ts... x) override;
+};
+
 extern WiFiComponent *global_wifi_component;
+
+template<typename... Ts> bool WiFiConnectedCondition<Ts...>::check(Ts... x) {
+  return global_wifi_component->is_connected();
+}
 
 ESPHOME_NAMESPACE_END
 
-#endif //ESPHOME_WIFI_COMPONENT_H
+#endif  // ESPHOME_WIFI_COMPONENT_H

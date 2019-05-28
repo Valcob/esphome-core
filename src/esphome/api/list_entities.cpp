@@ -33,8 +33,16 @@ bool ListEntitiesIterator::on_cover(cover::Cover *cover) {
   buffer.encode_nameable(cover);
   // string unique_id = 4;
   buffer.encode_string(4, get_default_unique_id("cover", cover));
+  auto traits = cover->get_traits();
+
   // bool assumed_state = 5;
-  buffer.encode_bool(5, cover->assumed_state());
+  buffer.encode_bool(5, traits.get_is_assumed_state());
+  // bool supports_position = 6;
+  buffer.encode_bool(6, traits.get_supports_position());
+  // bool supports_tilt = 7;
+  buffer.encode_bool(7, traits.get_supports_tilt());
+  // string device_class = 8;
+  buffer.encode_string(8, cover->get_device_class());
   return this->client_->send_buffer(APIMessageType::LIST_ENTITIES_COVER_RESPONSE);
 }
 #endif
@@ -98,15 +106,15 @@ bool ListEntitiesIterator::on_sensor(sensor::Sensor *sensor) {
 }
 #endif
 #ifdef USE_SWITCH
-bool ListEntitiesIterator::on_switch(switch_::Switch *switch_) {
+bool ListEntitiesIterator::on_switch(switch_::Switch *a_switch) {
   auto buffer = this->client_->get_buffer();
-  buffer.encode_nameable(switch_);
+  buffer.encode_nameable(a_switch);
   // string unique_id = 4;
-  buffer.encode_string(4, get_default_unique_id("switch", switch_));
+  buffer.encode_string(4, get_default_unique_id("switch", a_switch));
   // string icon = 5;
-  buffer.encode_string(5, switch_->get_icon());
+  buffer.encode_string(5, a_switch->get_icon());
   // bool assumed_state = 6;
-  buffer.encode_bool(6, switch_->assumed_state());
+  buffer.encode_bool(6, a_switch->assumed_state());
   return this->client_->send_buffer(APIMessageType::LIST_ENTITIES_SWITCH_RESPONSE);
 }
 #endif
@@ -128,17 +136,59 @@ bool ListEntitiesIterator::on_text_sensor(text_sensor::TextSensor *text_sensor) 
 bool ListEntitiesIterator::on_end() {
   return this->client_->send_empty_message(APIMessageType::LIST_ENTITIES_DONE_RESPONSE);
 }
-ListEntitiesIterator::ListEntitiesIterator(StoringController *controller, APIConnection *client)
-    : ComponentIterator(controller), client_(client) {
-
+ListEntitiesIterator::ListEntitiesIterator(APIServer *server, APIConnection *client)
+    : ComponentIterator(server), client_(client) {}
+bool ListEntitiesIterator::on_service(UserServiceDescriptor *service) {
+  auto buffer = this->client_->get_buffer();
+  service->encode_list_service_response(buffer);
+  return this->client_->send_buffer(APIMessageType::LIST_ENTITIES_SERVICE_RESPONSE);
 }
 
-APIMessageType ListEntitiesRequest::message_type() const {
-  return APIMessageType::LIST_ENTITIES_REQUEST;
+#ifdef USE_ESP32_CAMERA
+bool ListEntitiesIterator::on_camera(ESP32Camera *camera) {
+  auto buffer = this->client_->get_buffer();
+  buffer.encode_nameable(camera);
+  // string unique_id = 4;
+  buffer.encode_string(4, get_default_unique_id("camera", camera));
+  return this->client_->send_buffer(APIMessageType::LIST_ENTITIES_CAMERA_RESPONSE);
 }
+#endif
 
-} // namespace api
+#ifdef USE_CLIMATE
+bool ListEntitiesIterator::on_climate(climate::ClimateDevice *climate) {
+  auto buffer = this->client_->get_buffer();
+  buffer.encode_nameable(climate);
+  // string unique_id = 4;
+  buffer.encode_string(4, get_default_unique_id("climate", climate));
+
+  auto traits = climate->get_traits();
+  // bool supports_current_temperature = 5;
+  buffer.encode_bool(5, traits.get_supports_current_temperature());
+  // bool supports_two_point_target_temperature = 6;
+  buffer.encode_bool(6, traits.get_supports_two_point_target_temperature());
+  // repeated ClimateMode supported_modes = 7;
+  for (auto mode : {climate::CLIMATE_MODE_AUTO, climate::CLIMATE_MODE_OFF, climate::CLIMATE_MODE_COOL,
+                    climate::CLIMATE_MODE_HEAT}) {
+    if (traits.supports_mode(mode))
+      buffer.encode_uint32(7, mode, true);
+  }
+
+  // float visual_min_temperature = 8;
+  buffer.encode_float(8, traits.get_visual_min_temperature());
+  // float visual_max_temperature = 9;
+  buffer.encode_float(9, traits.get_visual_max_temperature());
+  // float visual_temperature_step = 10;
+  buffer.encode_float(10, traits.get_visual_temperature_step());
+  // bool supports_away = 11;
+  buffer.encode_bool(11, traits.get_supports_away());
+  return this->client_->send_buffer(APIMessageType::LIST_ENTITIES_CLIMATE_RESPONSE);
+}
+#endif
+
+APIMessageType ListEntitiesRequest::message_type() const { return APIMessageType::LIST_ENTITIES_REQUEST; }
+
+}  // namespace api
 
 ESPHOME_NAMESPACE_END
 
-#endif //USE_API
+#endif  // USE_API

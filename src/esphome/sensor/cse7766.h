@@ -31,31 +31,31 @@ class CSE7766Component : public PollingComponent, public UARTDevice {
   void loop() override;
   float get_setup_priority() const override;
   void update() override;
-  void setup() override;
   void dump_config() override;
 
  protected:
   bool check_byte_();
   void parse_data_();
-  uint32_t get_24_bit_uint(uint8_t start_index);
+  uint32_t get_24_bit_uint_(uint8_t start_index);
 
   uint8_t raw_data_[24];
   uint8_t raw_data_index_{0};
   uint32_t last_transmission_{0};
-  CSE7766VoltageSensor *voltage_{nullptr};
-  CSE7766CurrentSensor *current_{nullptr};
-  CSE7766PowerSensor *power_{nullptr};
-  float voltage_acc_{0.0};
-  float current_acc_{0.0};
-  float power_acc_{0.0};
-  uint32_t last_reading_{0};
-  uint32_t last_update_{0};
+  CSE7766VoltageSensor *voltage_sensor_{nullptr};
+  CSE7766CurrentSensor *current_sensor_{nullptr};
+  CSE7766PowerSensor *power_sensor_{nullptr};
+  float voltage_acc_{0.0f};
+  float current_acc_{0.0f};
+  float power_acc_{0.0f};
+  uint32_t voltage_counts_{0};
+  uint32_t current_counts_{0};
+  uint32_t power_counts_{0};
 };
 
-} // namespace sensor
+}  // namespace sensor
 
 ESPHOME_NAMESPACE_END
 
-#endif //USE_CSE7766
+#endif  // USE_CSE7766
 
-#endif //ESPHOME_SENSOR_CSE7766_H
+#endif  // ESPHOME_SENSOR_CSE7766_H

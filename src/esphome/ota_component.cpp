@@ -10,13 +10,9 @@
 #include "esphome/util.h"
 
 #include <cstdio>
-#ifndef USE_NEW_OTA
-  #include <ArduinoOTA.h>
-#else
 #include <MD5Builder.h>
 #ifdef ARDUINO_ARCH_ESP32
-  #include <Update.h>
-#endif
+#include <Update.h>
 #endif
 #include <StreamString.h>
 
@@ -24,103 +20,18 @@ ESPHOME_NAMESPACE_BEGIN
 
 static const char *TAG = "ota";
 
-#ifdef USE_NEW_OTA
 uint8_t OTA_VERSION_1_0 = 1;
-#endif
 
 void OTAComponent::setup() {
   this->server_ = new WiFiServer(this->port_);
   this->server_->begin();
 
-#ifdef USE_NEW_OTA
 #ifdef ARDUINO_ARCH_ESP32
-  add_shutdown_hook([this](const char *cause) {
-    this->server_->close();
-  });
+  add_shutdown_hook([this](const char *cause) { this->server_->close(); });
 #endif
-#else
-  ArduinoOTA.setHostname(get_app_name().c_str());
-  ArduinoOTA.setPort(this->port_);
-  switch (this->auth_type_) {
-    case PLAINTEXT: {
-      ArduinoOTA.setPassword(this->password_.c_str());
-      break;
-    }
-#if ARDUINO > 20300
-    case HASH: {
-      ArduinoOTA.setPasswordHash(this->password_.c_str());
-      break;
-    }
-#endif
-    case OPEN: {}
-    default: break;
-  }
-
-  ArduinoOTA.onStart([this]() {
-    ESP_LOGI(TAG, "OTA starting...");
-    this->ota_triggered_ = true;
-    this->at_ota_progress_message_ = 0;
-#ifdef ARDUINO_ARCH_ESP8266
-    global_preferences.prevent_write(true);
-#endif
-    this->status_set_warning();
-#ifdef USE_STATUS_LED
-    global_state |= STATUS_LED_WARNING;
-#endif
-  });
-  ArduinoOTA.onEnd([&]() {
-    ESP_LOGI(TAG, "OTA update finished!");
-    this->status_clear_warning();
-    delay(100);
-    run_safe_shutdown_hooks("ota");
-  });
-  ArduinoOTA.onProgress([this](uint progress, uint total) {
-    tick_status_led();
-    if (this->at_ota_progress_message_++ % 8 != 0)
-      return; // only print every 8th message
-    float percentage = float(progress) * 100 / float(total);
-    ESP_LOGD(TAG, "OTA in progress: %0.1f%%", percentage);
-  });
-  ArduinoOTA.onError([this](ota_error_t error) {
-    ESP_LOGE(TAG, "Error[%u]: ", error);
-    switch (error) {
-      case OTA_AUTH_ERROR: {
-        ESP_LOGE(TAG, "  Auth Failed");
-        break;
-      }
-      case OTA_BEGIN_ERROR: {
-        ESP_LOGE(TAG, "  Begin Failed");
-        break;
-      }
-      case OTA_CONNECT_ERROR: {
-        ESP_LOGE(TAG, "  Connect Failed");
-        break;
-      }
-      case OTA_RECEIVE_ERROR: {
-        ESP_LOGE(TAG, "  Receive Failed");
-        break;
-      }
-      case OTA_END_ERROR: {
-        ESP_LOGE(TAG, "  End Failed");
-        break;
-      }
-      default:ESP_LOGE(TAG, "  Unknown Error");
-    }
-    this->ota_triggered_ = false;
-    this->status_clear_warning();
-    this->status_momentary_error("onerror", 5000);
-#ifdef ARDUINO_ARCH_ESP8266
-    global_preferences.prevent_write(false);
-#endif
-  });
-  ArduinoOTA.begin();
-#endif
-
 
   if (this->has_safe_mode_) {
-    add_safe_shutdown_hook([this](const char *cause) {
-      this->clean_rtc();
-    });
+    add_safe_shutdown_hook([this](const char *cause) { this->clean_rtc(); });
   }
 
   this->dump_config();
@@ -138,15 +49,7 @@ void OTAComponent::dump_config() {
 }
 
 void OTAComponent::loop() {
-#ifdef USE_NEW_OTA
   this->handle_();
-#else
-  do {
-    ArduinoOTA.handle();
-    tick_status_led();
-    yield();
-  } while (this->ota_triggered_);
-#endif
 
   if (this->has_safe_mode_ && (millis() - this->safe_mode_start_time_) > this->safe_mode_enable_time_) {
     this->has_safe_mode_ = false;
@@ -156,7 +59,6 @@ void OTAComponent::loop() {
   }
 }
 
-#ifdef USE_NEW_OTA
 void OTAComponent::handle_() {
   OTAResponseTypes error_code = OTA_RESPONSE_ERROR_UNKNOWN;
   bool update_started = false;
@@ -190,8 +92,8 @@ void OTAComponent::handle_() {
   }
   // 0x6C, 0x26, 0xF7, 0x5C, 0x45
   if (buf[0] != 0x6C || buf[1] != 0x26 || buf[2] != 0xF7 || buf[3] != 0x5C || buf[4] != 0x45) {
-    ESP_LOGW(TAG, "Magic bytes do not match! 0x%02X-0x%02X-0x%02X-0x%02X-0x%02X",
-             buf[0], buf[1], buf[2], buf[3], buf[4]);
+    ESP_LOGW(TAG, "Magic bytes do not match! 0x%02X-0x%02X-0x%02X-0x%02X-0x%02X", buf[0], buf[1], buf[2], buf[3],
+             buf[4]);
     error_code = OTA_RESPONSE_ERROR_MAGIC;
     goto error;
   }
@@ -205,7 +107,7 @@ void OTAComponent::handle_() {
     ESP_LOGW(TAG, "Reading features failed!");
     goto error;
   }
-  ota_features = buf[0];
+  ota_features = buf[0];  // NOLINT
   ESP_LOGV(TAG, "OTA features is 0x%02X", ota_features);
 
   // Acknowledge header - 1 byte
@@ -222,7 +124,7 @@ void OTAComponent::handle_() {
     ESP_LOGV(TAG, "Auth: Nonce is %s", sbuf);
 
     // Send nonce, 32 bytes hex MD5
-    if (this->client_.write(sbuf, 32) != 32) {
+    if (this->client_.write(reinterpret_cast<uint8_t *>(sbuf), 32) != 32) {
       ESP_LOGW(TAG, "Auth: Writing nonce failed!");
       goto error;
     }
@@ -313,7 +215,7 @@ void OTAComponent::handle_() {
       goto error;
     }
 #endif
-    ESP_LOGW(TAG, "Preparing OTA partition failed!");
+    ESP_LOGW(TAG, "Preparing OTA partition failed! '%s'", ss.c_str());
     error_code = OTA_RESPONSE_ERROR_UPDATE_PREPARE;
     goto error;
   }
@@ -342,7 +244,7 @@ void OTAComponent::handle_() {
 
     uint32_t written = Update.write(buf, available);
     if (written != available) {
-      ESP_LOGW(TAG, "Error writing binary data to flash: %u != %d!", written, available);
+      ESP_LOGW(TAG, "Error writing binary data to flash: %u != %zu!", written, available);
       error_code = OTA_RESPONSE_ERROR_WRITING_FLASH;
       goto error;
     }
@@ -381,23 +283,32 @@ void OTAComponent::handle_() {
   delay(100);
   safe_reboot("ota");
 
-  error:
+error:
   if (update_started) {
     StreamString ss;
     Update.printError(ss);
     ESP_LOGW(TAG, "Update end failed! Error: %s", ss.c_str());
   }
   if (this->client_.connected()) {
-    this->client_.write(error_code);
+    this->client_.write(static_cast<uint8_t>(error_code));
     this->client_.flush();
   }
   this->client_.stop();
+
 #ifdef ARDUINO_ARCH_ESP32
   if (update_started) {
     Update.abort();
   }
 #endif
+
+#ifdef ARDUINO_ARCH_ESP8266
+  if (update_started) {
+    Update.end();
+  }
+#endif
+
   this->status_momentary_error("onerror", 5000);
+
 #ifdef ARDUINO_ARCH_ESP8266
   global_preferences.prevent_write(false);
 #endif
@@ -429,46 +340,35 @@ size_t OTAComponent::wait_receive_(uint8_t *buf, size_t bytes, bool check_discon
   if (bytes == 0)
     bytes = std::min(available, size_t(1024));
 
-  int res = this->client_.read(buf, bytes);
+  bool success = false;
+  for (uint32_t i = 0; !success && i < 100; i++) {
+    int res = this->client_.read(buf, bytes);
 
-  if (res != int(bytes)) {
-    ESP_LOGW(TAG, "Error reading binary data: %d (%u)!", res, bytes);
+    if (res != int(bytes)) {
+      // ESP32 implementation has an issue where calling read can fail with EAGAIN (race condition)
+      // so just re-try it until it works (with generous timeout of 1s)
+      // because we check with available() first this should not cause us any trouble in all other cases
+      delay(10);
+    } else {
+      success = true;
+    }
+  }
+
+  if (!success) {
+    ESP_LOGW(TAG, "Reading %zu bytes of binary data failed!", bytes);
     return 0;
   }
 
   return bytes;
 }
-#endif
 
-OTAComponent::OTAComponent(uint16_t port)
-    : port_(port) {
+OTAComponent::OTAComponent(uint16_t port) : port_(port) {}
 
-}
+void OTAComponent::set_auth_password(const std::string &password) { this->password_ = password; }
 
-#ifdef USE_NEW_OTA
-void OTAComponent::set_auth_password(const std::string &password) {
-  this->password_ = password;
-}
-#else
-void OTAComponent::set_auth_plaintext_password(const std::string &password) {
-  this->auth_type_ = PLAINTEXT;
-  this->password_ = password;
-}
-void OTAComponent::set_auth_password_hash(const std::string &hash) {
-  this->auth_type_ = HASH;
-  this->password_ = hash;
-}
-#endif
-
-float OTAComponent::get_setup_priority() const {
-  return setup_priority::MQTT_CLIENT + 1.0f;
-}
-uint16_t OTAComponent::get_port() const {
-  return this->port_;
-}
-void OTAComponent::set_port(uint16_t port) {
-  this->port_ = port;
-}
+float OTAComponent::get_setup_priority() const { return setup_priority::MQTT_CLIENT + 1.0f; }
+uint16_t OTAComponent::get_port() const { return this->port_; }
+void OTAComponent::set_port(uint16_t port) { this->port_ = port; }
 void OTAComponent::start_safe_mode(uint8_t num_attempts, uint32_t enable_time) {
   this->has_safe_mode_ = true;
   this->safe_mode_start_time_ = millis();
@@ -486,17 +386,17 @@ void OTAComponent::start_safe_mode(uint8_t num_attempts, uint32_t enable_time) {
 
 #ifdef USE_STATUS_LED
     if (global_status_led != nullptr) {
-      global_status_led->setup_();
+      global_status_led->call_setup();
     }
 #endif
     global_state = STATUS_LED_ERROR;
     network_setup();
-    this->setup_();
+    this->call_setup();
 
     ESP_LOGI(TAG, "Waiting for OTA attempt.");
     uint32_t begin = millis();
     while ((millis() - begin) < enable_time) {
-      this->loop_();
+      this->call_loop();
       network_tick();
       tick_status_led();
       yield();
@@ -508,19 +408,15 @@ void OTAComponent::start_safe_mode(uint8_t num_attempts, uint32_t enable_time) {
     this->write_rtc_(this->safe_mode_rtc_value_ + 1);
   }
 }
-void OTAComponent::write_rtc_(uint32_t val) {
-  this->rtc_.save(&val);
-}
+void OTAComponent::write_rtc_(uint32_t val) { this->rtc_.save(&val); }
 uint32_t OTAComponent::read_rtc_() {
   uint32_t val;
   if (!this->rtc_.load(&val))
     return 0;
   return val;
 }
-void OTAComponent::clean_rtc() {
-  this->write_rtc_(0);
-}
+void OTAComponent::clean_rtc() { this->write_rtc_(0); }
 
 ESPHOME_NAMESPACE_END
 
-#endif //USE_OTA
+#endif  // USE_OTA

@@ -11,15 +11,14 @@
 #include <WiFiClient.h>
 
 #ifdef ARDUINO_ARCH_ESP32
-  #define OTA_DEFAULT_PORT 3232
+#define OTA_DEFAULT_PORT 3232
 #endif
 #ifdef ARDUINO_ARCH_ESP8266
-  #define OTA_DEFAULT_PORT 8266
+#define OTA_DEFAULT_PORT 8266
 #endif
 
 ESPHOME_NAMESPACE_BEGIN
 
-#ifdef USE_NEW_OTA
 enum OTAResponseTypes {
   OTA_RESPONSE_OK = 0,
   OTA_RESPONSE_REQUEST_AUTH = 1,
@@ -45,7 +44,6 @@ enum OTAResponseTypes {
 };
 
 extern uint8_t OTA_VERSION_1_0;
-#endif
 
 /// OTAComponent provides a simple way to integrate Over-the-Air updates into your app using ArduinoOTA.
 class OTAComponent : public Component {
@@ -56,7 +54,6 @@ class OTAComponent : public Component {
    */
   explicit OTAComponent(uint16_t port = OTA_DEFAULT_PORT);
 
-#ifdef USE_NEW_OTA
   /** Set a plaintext password that OTA will use for authentication.
    *
    * Warning: This password will be stored in plaintext in the ROM and can be read
@@ -65,19 +62,6 @@ class OTAComponent : public Component {
    * @param password The plaintext password.
    */
   void set_auth_password(const std::string &password);
-#else
-  /** Set a plaintext password for legacy OTA.
-   *
-   * @param password The password
-   */
-  void set_auth_plaintext_password(const std::string &password);
-
-  /** Set a hashed password for legacy OTA.
-   *
-   * @param password The MD5 password hash.
-   */
-  void set_auth_password_hash(const std::string &hash);
-#endif
 
   /// Manually set the port OTA should listen on.
   void set_port(uint16_t port);
@@ -111,35 +95,27 @@ class OTAComponent : public Component {
   void write_rtc_(uint32_t val);
   uint32_t read_rtc_();
 
-#ifdef USE_NEW_OTA
   void handle_();
   size_t wait_receive_(uint8_t *buf, size_t bytes, bool check_disconnected = true);
-#else
-  enum { OPEN, PLAINTEXT, HASH } auth_type_{OPEN};
-#endif
 
   std::string password_;
 
   uint16_t port_;
 
   WiFiServer *server_{nullptr};
-#ifdef USE_NEW_OTA
   WiFiClient client_{};
-#else
-  bool ota_triggered_{false};
-#endif
 
-  bool has_safe_mode_{false}; ///< stores whether safe mode can be enabled.
-  uint32_t safe_mode_start_time_; ///<stores when safe mode was enabled.
-  uint32_t safe_mode_enable_time_{60000}; ///< The time safe mode should be on for.
+  bool has_safe_mode_{false};              ///< stores whether safe mode can be enabled.
+  uint32_t safe_mode_start_time_;          ///< stores when safe mode was enabled.
+  uint32_t safe_mode_enable_time_{60000};  ///< The time safe mode should be on for.
   uint32_t safe_mode_rtc_value_;
   uint8_t safe_mode_num_attempts_;
-  uint8_t at_ota_progress_message_{0}; ///< store OTA progress message index so that we don't spam logs
+  uint8_t at_ota_progress_message_{0};  ///< store OTA progress message index so that we don't spam logs
   ESPPreferenceObject rtc_;
 };
 
 ESPHOME_NAMESPACE_END
 
-#endif //USE_OTA
+#endif  // USE_OTA
 
-#endif //ESPHOME_OTA_COMPONENT_H
+#endif  // ESPHOME_OTA_COMPONENT_H

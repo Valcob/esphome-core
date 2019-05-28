@@ -8,6 +8,7 @@
 #include "esphome/helpers.h"
 #include "esphome/component.h"
 #include "esphome/controller.h"
+#include "esphome/esp32_camera.h"
 
 ESPHOME_NAMESPACE_BEGIN
 
@@ -20,36 +21,39 @@ class APIBuffer {
   size_t get_length() const;
   void write(uint8_t value);
 
-  void encode_int32(uint32_t field, int32_t value);
-  void encode_uint32(uint32_t field, uint32_t value);
-  void encode_sint32(uint32_t field, int32_t value);
-  void encode_bool(uint32_t field, bool value);
+  void encode_int32(uint32_t field, int32_t value, bool force = false);
+  void encode_uint32(uint32_t field, uint32_t value, bool force = false);
+  void encode_sint32(uint32_t field, int32_t value, bool force = false);
+  void encode_bool(uint32_t field, bool value, bool force = false);
   void encode_string(uint32_t field, const std::string &value);
   void encode_string(uint32_t field, const char *string, size_t len);
-  void encode_fixed32(uint32_t field, uint32_t value);
-  void encode_float(uint32_t field, float value);
+  void encode_bytes(uint32_t field, const uint8_t *data, size_t len);
+  void encode_fixed32(uint32_t field, uint32_t value, bool force = false);
+  void encode_float(uint32_t field, float value, bool force = false);
   void encode_nameable(Nameable *nameable);
 
   size_t begin_nested(uint32_t field);
   void end_nested(size_t begin_index);
 
-  void encode_field_(uint32_t field, uint32_t type);
-  void encode_varint_(uint32_t value);
-  uint32_t varint_length_(uint32_t value);
+  void encode_field_raw(uint32_t field, uint32_t type);
+  void encode_varint_raw(uint32_t value);
 
  protected:
   std::vector<uint8_t> *buffer_;
 };
 
-optional<uint32_t> proto_decode_varuint32(uint8_t *buf, size_t len, uint32_t *consumed = nullptr);
+optional<uint32_t> proto_decode_varuint32(const uint8_t *buf, size_t len, uint32_t *consumed = nullptr);
 
 std::string as_string(const uint8_t *value, size_t len);
 int32_t as_sint32(uint32_t val);
 float as_float(uint32_t val);
 
+class APIServer;
+class UserServiceDescriptor;
+
 class ComponentIterator {
  public:
-  ComponentIterator(StoringController *controller);
+  ComponentIterator(APIServer *server);
 
   void begin();
   void advance();
@@ -70,10 +74,17 @@ class ComponentIterator {
   virtual bool on_sensor(sensor::Sensor *sensor) = 0;
 #endif
 #ifdef USE_SWITCH
-  virtual bool on_switch(switch_::Switch *switch_) = 0;
+  virtual bool on_switch(switch_::Switch *a_switch) = 0;
 #endif
 #ifdef USE_TEXT_SENSOR
   virtual bool on_text_sensor(text_sensor::TextSensor *text_sensor) = 0;
+#endif
+  virtual bool on_service(UserServiceDescriptor *service);
+#ifdef USE_ESP32_CAMERA
+  virtual bool on_camera(ESP32Camera *camera);
+#endif
+#ifdef USE_CLIMATE
+  virtual bool on_climate(climate::ClimateDevice *climate) = 0;
 #endif
   virtual bool on_end();
 
@@ -102,17 +113,24 @@ class ComponentIterator {
 #ifdef USE_TEXT_SENSOR
     TEXT_SENSOR,
 #endif
+    SERVICE,
+#ifdef USE_ESP32_CAMERA
+    CAMERA,
+#endif
+#ifdef USE_CLIMATE
+    CLIMATE,
+#endif
     MAX,
   } state_{IteratorState::NONE};
   size_t at_{0};
 
-  StoringController *controller_;
+  APIServer *server_;
 };
 
-} // namespace api
+}  // namespace api
 
 ESPHOME_NAMESPACE_END
 
-#endif //USE_API
+#endif  // USE_API
 
-#endif //ESPHOME_API_UTIL_H
+#endif  // ESPHOME_API_UTIL_H
